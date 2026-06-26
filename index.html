@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TypeFlow</title>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #f5f0e8;
+  --ink:     #1a1612;
+  --ink-mid: #6a6258;
+  --ink-dim: #aaa098;
+  --accent:  #7a6a52;
+  --hl:      rgba(160,140,100,0.13);
+  --border:  #ddd6c8;
+  --font:    'Courier Prime', 'Courier New', monospace;
+  --ui:      -apple-system, 'SF Pro Text', system-ui, sans-serif;
+}
+
+html, body {
+  height: 100%; background: var(--bg);
+  overflow: hidden; -webkit-text-size-adjust: 100%;
+}
+
+#app {
+  display: flex; flex-direction: column;
+  height: 100dvh; height: 100vh;
+}
+
+/* ── Topbar ── */
+#topbar {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px; gap: 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0; z-index: 20;
+  transition: opacity 0.3s;
+}
+body.focus #topbar { opacity: 0; pointer-events: none; }
+body.focus #topbar:hover { opacity: 1; pointer-events: all; }
+
+.brand {
+  font-family: var(--font); font-size: 11px;
+  color: var(--accent); letter-spacing: 0.16em;
+  text-transform: uppercase; flex-shrink: 0;
+}
+#doc-title {
+  flex: 1; background: none; border: none;
+  color: var(--ink-mid); font-family: var(--ui);
+  font-size: 13px; text-align: center;
+  outline: none; min-width: 0;
+}
+#doc-title::placeholder { color: var(--ink-dim); }
+#doc-title:focus { color: var(--ink); }
+
+.tbtns { display: flex; gap: 5px; flex-shrink: 0; }
+.tbtn {
+  background: none; border: 1px solid var(--border);
+  color: var(--ink-mid); border-radius: 5px;
+  padding: 4px 10px; font-size: 12px; cursor: pointer;
+  font-family: var(--ui); white-space: nowrap;
+  transition: color .12s, border-color .12s;
+}
+.tbtn:hover { color: var(--accent); border-color: var(--accent); }
+.tbtn.on   { color: var(--accent); border-color: var(--accent); }
+
+/* ── Editor area ── */
+#editor-area {
+  flex: 1; position: relative; overflow: hidden;
+}
+
+/* Fixed guide line — stays put, text scrolls behind it */
+#guide {
+  position: absolute; left: 0; right: 0;
+  pointer-events: none; z-index: 10;
+  /* top set by JS */
+}
+#guide::before {
+  content: ''; position: absolute;
+  left: 0; right: 0; top: 0; height: 1px;
+  background: rgba(122,106,82,0.3);
+}
+#guide::after {
+  content: ''; position: absolute;
+  left: 0; right: 0;
+  background: var(--hl);
+  /* height and top set by JS to match one line */
+}
+
+/* The textarea fills the area; its OWN scrollbar is hidden.
+   We set scrollTop manually to implement typewriter mode. */
+#writer {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  resize: none; border: none; outline: none;
+  background: transparent;
+  color: var(--ink); caret-color: var(--accent);
+  font-family: var(--font);
+  font-size: 18px; line-height: 1.8;
+  overflow-y: scroll; overflow-x: hidden;
+  scrollbar-width: none;
+  /* padding set by JS */
+}
+#writer::-webkit-scrollbar { display: none; }
+#writer::placeholder { color: var(--ink-dim); }
+
+/* ── Status bar ── */
+#status {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 5px 16px; flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  transition: opacity 0.3s;
+}
+body.focus #status { opacity: 0; }
+.stat { font-family: var(--ui); font-size: 11px; color: var(--ink-dim); }
+.stat b { color: var(--ink-mid); font-weight: 500; }
+
+/* ── Overlay / Panels ── */
+#overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(20,18,14,0.45);
+  z-index: 100; align-items: center; justify-content: center;
+}
+#overlay.open { display: flex; }
+
+.panel {
+  background: #eeead f; background: #f0ebe1;
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 22px; width: min(340px, 94vw);
+  max-height: 88vh; overflow-y: auto;
+  box-shadow: 0 6px 30px rgba(0,0,0,0.1);
+}
+.ph { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.ph h2 { font-family:var(--ui); font-size:14px; font-weight:600; color:var(--ink); }
+.ph button { background:none;border:none;color:var(--ink-dim);font-size:20px;cursor:pointer;line-height:1;padding:0 3px; }
+.pp { font-family:var(--ui);font-size:13px;color:var(--ink-mid);line-height:1.6;margin-bottom:14px; }
+.plbl { font-family:var(--ui);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-dim);margin-bottom:7px; }
+.psec { margin-bottom:16px; }
+
+.flist { display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto; }
+.fi { display:flex;align-items:center;padding:8px 10px;border-radius:7px;border:1px solid var(--border);cursor:pointer;transition:border-color .12s; }
+.fi:hover { border-color:var(--accent); }
+.fi.cur { border-color:var(--accent);background:rgba(122,106,82,.07); }
+.fn { font-family:var(--ui);font-size:13px;color:var(--ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.fm { font-family:var(--ui);font-size:11px;color:var(--ink-dim);margin-left:8px;flex-shrink:0; }
+.fd { background:none;border:none;color:var(--ink-dim);cursor:pointer;font-size:13px;padding:0 0 0 8px;flex-shrink:0; }
+.fd:hover { color:#b84040; }
+
+.bp { display:block;width:100%;padding:10px;background:var(--ink);color:var(--bg);border:none;border-radius:7px;font-family:var(--ui);font-size:13px;font-weight:600;cursor:pointer;text-align:center;margin-top:4px;transition:opacity .12s; }
+.bp:hover { opacity:.82; }
+.bs { display:block;width:100%;padding:9px;background:none;color:var(--ink-mid);border:1px solid var(--border);border-radius:7px;font-family:var(--ui);font-size:13px;cursor:pointer;text-align:center;margin-top:7px; }
+.bs:hover { border-color:var(--ink-mid);color:var(--ink); }
+
+.srow { display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border); }
+.srow:last-child { border-bottom:none; }
+.slbl { font-family:var(--ui);font-size:13px;color:var(--ink-mid); }
+.sval { font-family:var(--ui);font-size:12px;color:var(--accent);min-width:40px;text-align:right; }
+input[type=range] { width:100%;accent-color:var(--accent);margin-top:6px; }
+
+.tog { position:relative;width:38px;height:22px;flex-shrink:0; }
+.tog input { opacity:0;width:0;height:0; }
+.tog-t { position:absolute;inset:0;background:var(--border);border-radius:11px;cursor:pointer;transition:background .2s; }
+.tog input:checked + .tog-t { background:var(--accent); }
+.tog-k { position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s;pointer-events:none; }
+.tog input:checked ~ .tog-k { transform:translateX(16px); }
+
+.gst { display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:7px;border:1px solid var(--border);margin-bottom:12px; }
+.gdot { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+.gdot.on { background:#4caf82; } .gdot.off { background:var(--ink-dim); }
+.glbl { font-family:var(--ui);font-size:13px;color:var(--ink-mid); }
+
+#toast {
+  position:fixed;bottom:46px;left:50%;
+  transform:translateX(-50%) translateY(8px);
+  background:var(--ink);color:var(--bg);
+  font-family:var(--ui);font-size:12px;
+  padding:7px 16px;border-radius:20px;
+  z-index:300;opacity:0;
+  transition:opacity .18s,transform .18s;
+  pointer-events:none;white-space:nowrap;
+}
+#toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <span class="brand">TypeFlow</span>
+    <input id="doc-title" type="text" placeholder="Untitled" autocomplete="off" spellcheck="false">
+    <div class="tbtns">
+      <button class="tbtn" id="btn-docs">Docs</button>
+      <button class="tbtn" id="btn-drive">Drive</button>
+      <button class="tbtn" id="btn-set">Settings</button>
+      <button class="tbtn" id="btn-focus">Focus</button>
+    </div>
+  </div>
+
+  <div id="editor-area">
+    <div id="guide"></div>
+    <textarea id="writer" placeholder="Begin writing. The line stays. The words rise."></textarea>
+  </div>
+
+  <div id="status">
+    <span class="stat">words <b id="wc">0</b></span>
+    <span class="stat" id="savest">—</span>
+    <span class="stat">chars <b id="cc">0</b></span>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="panel" id="p-docs" style="display:none">
+    <div class="ph"><h2>Documents</h2><button id="x-docs">×</button></div>
+    <div class="psec"><div class="plbl">Saved locally</div><div class="flist" id="flist"></div></div>
+    <button class="bp" id="btn-new">+ New document</button>
+    <button class="bs" id="btn-etxt">Export .txt</button>
+    <button class="bs" id="btn-emd">Export .md</button>
+  </div>
+
+  <div class="panel" id="p-drive" style="display:none">
+    <div class="ph"><h2>Google Drive</h2><button id="x-drive">×</button></div>
+    <div class="gst"><div class="gdot off" id="gdot"></div><span class="glbl" id="glbl">Not connected</span></div>
+    <p class="pp">Saves documents as plain text in a <strong>TypeFlow/</strong> folder. Paste your OAuth Client ID in the source to activate.</p>
+    <div id="g-conn"><button class="bp" id="btn-gauth">Connect Google Drive</button></div>
+    <div id="g-act" style="display:none">
+      <button class="bp" id="btn-gpush">Save to Drive ↑</button>
+      <button class="bs" id="btn-glist">Browse Drive files ↓</button>
+      <button class="bs" id="btn-gdisc">Disconnect</button>
+    </div>
+    <div id="g-files" style="display:none;margin-top:14px">
+      <div class="plbl">TypeFlow/ on Drive</div>
+      <div class="flist" id="gflist"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="p-set" style="display:none">
+    <div class="ph"><h2>Settings</h2><button id="x-set">×</button></div>
+    <div class="psec">
+      <div class="plbl">Typewriter line position (from top)</div>
+      <div class="srow"><span class="slbl">Position</span><span class="sval" id="twv">40%</span></div>
+      <input type="range" id="tw-r" min="15" max="70" value="40" step="5">
+    </div>
+    <div class="psec">
+      <div class="plbl">Typography</div>
+      <div class="srow"><span class="slbl">Font size</span><span class="sval" id="fsv">18px</span></div>
+      <input type="range" id="fs-r" min="14" max="28" value="18" step="1">
+      <div class="srow" style="margin-top:10px"><span class="slbl">Line spacing</span><span class="sval" id="lhv">1.8</span></div>
+      <input type="range" id="lh-r" min="140" max="250" value="180" step="5">
+      <div class="srow" style="margin-top:10px"><span class="slbl">Column width</span><span class="sval" id="mwv">640px</span></div>
+      <input type="range" id="mw-r" min="360" max="900" value="640" step="20">
+    </div>
+    <div class="psec">
+      <div class="plbl">Options</div>
+      <div class="srow">
+        <span class="slbl">Guide line</span>
+        <label class="tog"><input type="checkbox" id="tog-g" checked><div class="tog-t"></div><div class="tog-k"></div></label>
+      </div>
+      <div class="srow">
+        <span class="slbl">Typewriter bell 🔔</span>
+        <label class="tog"><input type="checkbox" id="tog-bell"><div class="tog-t"></div><div class="tog-k"></div></label>
+      </div>
+      <div class="srow">
+        <span class="slbl">Auto-save (30s)</span>
+        <label class="tog"><input type="checkbox" id="tog-auto" checked><div class="tog-t"></div><div class="tog-k"></div></label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────────
+const CLIENT_ID = '416878174385-7phg71mo1vshl0oher2vn2n4gja2f9ra.apps.googleusercontent.com'; // paste Google OAuth Client ID here to enable Drive
+
+// ── State ───────────────────────────────────────────────────────────────
+const SK='tf_s', DK='tf_d', TK='tf_tk';
+let S = { tw:40, fs:18, lh:180, mw:640, guide:true, bell:false, auto:true };
+let curId=null, dirty=false, gToken=null, tokenClient=null;
+
+// Typewriter metrics (computed once, recomputed on font change)
+let lineHeightPx = 0;   // exact px per line
+let guideTopPx   = 0;   // px from top of editor-area to guide line
+let twPaddingTop = 0;   // textarea padding-top we set
+let colPadLeft   = 0;   // textarea left padding
+
+// ── Persistence ─────────────────────────────────────────────────────────
+function loadS(){ try{ Object.assign(S, JSON.parse(localStorage.getItem(SK)||'{}')); }catch(e){} }
+function saveS(){ localStorage.setItem(SK, JSON.stringify(S)); }
+function getDocs(){ try{ return JSON.parse(localStorage.getItem(DK)||'{}'); }catch(e){ return {}; } }
+function putDocs(d){ localStorage.setItem(DK, JSON.stringify(d)); }
+function genId(){ return 'doc_'+Date.now()+'_'+Math.random().toString(36).slice(2,6); }
+
+// ── Document ops ─────────────────────────────────────────────────────────
+function newDoc(){
+  if(curId && dirty) saveDoc();
+  const id=genId(), docs=getDocs();
+  docs[id]={id,title:'Untitled',content:'',created:Date.now(),updated:Date.now()};
+  putDocs(docs); openDoc(id); closeOverlay();
+}
+
+function openDoc(id){
+  const docs=getDocs(), doc=docs[id]; if(!doc) return;
+  if(curId && dirty) saveDoc();
+  curId=id;
+  const w=document.getElementById('writer');
+  document.getElementById('doc-title').value=doc.title;
+  w.value=doc.content;
+  dirty=false; setSave('Saved'); updateCounts();
+  // After render, scroll so first line is at guide
+  requestAnimationFrame(()=>{ w.scrollTop=0; typewriterScroll(); });
+}
+
+function saveDoc(){
+  if(!curId) return;
+  const docs=getDocs();
+  if(!docs[curId]) docs[curId]={id:curId,created:Date.now()};
+  docs[curId].title=document.getElementById('doc-title').value||'Untitled';
+  docs[curId].content=document.getElementById('writer').value;
+  docs[curId].updated=Date.now();
+  putDocs(docs); dirty=false; setSave('Saved');
+}
+
+function delDoc(id){
+  const docs=getDocs(); delete docs[id]; putDocs(docs);
+  if(curId===id){
+    const rem=Object.keys(docs);
+    rem.length ? openDoc(rem.sort((a,b)=>(docs[b].updated||0)-(docs[a].updated||0))[0]) : newDoc();
+  }
+  renderDocs();
+}
+
+function renderDocs(){
+  const docs=getDocs(), list=document.getElementById('flist');
+  const sorted=Object.values(docs).sort((a,b)=>(b.updated||0)-(a.updated||0));
+  if(!sorted.length){ list.innerHTML='<div style="color:var(--ink-dim);font-family:var(--ui);font-size:13px;padding:8px 0">No documents</div>'; return; }
+  list.innerHTML=sorted.map(d=>`
+    <div class="fi ${d.id===curId?'cur':''}" data-id="${d.id}">
+      <span class="fn">${d.title||'Untitled'}</span>
+      <span class="fm">${wc(d.content)}w</span>
+      <button class="fd" data-del="${d.id}">✕</button>
+    </div>`).join('');
+  list.querySelectorAll('.fi').forEach(el=>{
+    el.addEventListener('click', e=>{ if(e.target.dataset.del) return; openDoc(el.dataset.id); closeOverlay(); });
+  });
+  list.querySelectorAll('.fd').forEach(btn=>{
+    btn.addEventListener('click', e=>{ e.stopPropagation(); if(confirm('Delete?')) delDoc(btn.dataset.del); });
+  });
+}
+
+// ── Counts / status ──────────────────────────────────────────────────────
+function wc(t){ return (t||'').trim().split(/\s+/).filter(Boolean).length; }
+function updateCounts(){
+  const t=document.getElementById('writer').value;
+  document.getElementById('wc').textContent=wc(t);
+  document.getElementById('cc').textContent=t.length;
+}
+function setSave(msg){
+  const el=document.getElementById('savest');
+  el.textContent=msg; el.style.color=msg==='unsaved'?'var(--accent)':'var(--ink-dim)';
+}
+
+// ── TYPEWRITER SCROLLING ─────────────────────────────────────────────────
+//
+// THE KEY INSIGHT:
+// We set textarea padding-top = guideTopPx, so line 0 starts right at the guide.
+// We also set padding-bottom = (editorHeight - guideTopPx) so the last line
+// can scroll up to the guide.
+//
+// Then on every keystroke:
+//   currentLineIndex = count newlines before caret
+//   scrollTop = currentLineIndex * lineHeightPx
+//
+// That's it. No DOM rect tricks. Pure arithmetic.
+
+function measureLineHeight(){
+  // Create a temporary off-screen textarea with exact same styles
+  const w=document.getElementById('writer');
+  const tmp=document.createElement('textarea');
+  const cs=getComputedStyle(w);
+  tmp.style.cssText=`position:absolute;top:-9999px;left:-9999px;visibility:hidden;
+    font-family:${cs.fontFamily};font-size:${cs.fontSize};
+    line-height:${cs.lineHeight};letter-spacing:${cs.letterSpacing};
+    padding:0;border:none;outline:none;resize:none;
+    width:${w.clientWidth}px;white-space:pre-wrap;word-break:break-word;`;
+  document.body.appendChild(tmp);
+  // Two lines → height = 2x; one line → 1x; diff = lineHeightPx
+  tmp.value='A\nB';
+  const h2=tmp.scrollHeight;
+  tmp.value='A';
+  const h1=tmp.scrollHeight;
+  document.body.removeChild(tmp);
+  lineHeightPx = h2 - h1;
+  if(lineHeightPx < 10) lineHeightPx = S.fs * (S.lh/100); // fallback
+}
+
+function computeLayout(){
+  const area=document.getElementById('editor-area');
+  const areaH=area.clientHeight;
+  guideTopPx = Math.round(areaH * S.tw / 100);
+
+  // Column padding
+  const areaW=area.clientWidth;
+  const colW=Math.min(S.mw, areaW);
+  colPadLeft=Math.max(20, Math.round((areaW-colW)/2));
+
+  const w=document.getElementById('writer');
+  // padding-top: push first line down to guide
+  // We subtract half a line so the guide bisects the line
+  twPaddingTop=Math.max(0, guideTopPx - Math.round(lineHeightPx*0.4));
+  w.style.paddingTop    = twPaddingTop + 'px';
+  w.style.paddingBottom = (areaH - guideTopPx + lineHeightPx*2) + 'px';
+  w.style.paddingLeft   = colPadLeft + 'px';
+  w.style.paddingRight  = colPadLeft + 'px';
+
+  // Position guide line
+  const guide=document.getElementById('guide');
+  guide.style.top=guideTopPx+'px';
+  // Height of highlight band = one full line
+  guide.style.setProperty('--lh', lineHeightPx+'px');
+  guide.style.display=S.guide?'block':'none';
+  // Set the ::after pseudo to cover one line
+  // We do this via a real element instead of pseudo since we need dynamic height
+  positionGuideHighlight(guideTopPx, lineHeightPx);
+}
+
+// Use a real child div for the highlight (easier than pseudo dynamic sizing)
+function positionGuideHighlight(y, lh){
+  let hl=document.getElementById('guide-hl');
+  if(!hl){
+    hl=document.createElement('div');
+    hl.id='guide-hl';
+    hl.style.cssText=`position:fixed;left:0;right:0;pointer-events:none;z-index:9;background:var(--hl);`;
+    document.body.appendChild(hl);
+  }
+  hl.style.top=(y - Math.round(lh*0.55))+'px';
+  hl.style.height=Math.round(lh*1.1)+'px';
+  hl.style.display=S.guide?'block':'none';
+}
+
+function typewriterScroll(){
+  const w=document.getElementById('writer');
+  const text=w.value;
+  const pos=w.selectionStart;
+
+  // Count visual lines before caret
+  // For each segment between newlines, count how many display rows it takes
+  // given the textarea's width and font.
+  // Simple method: count newlines for paragraph lines, then estimate wrapping.
+  const textBefore=text.substring(0, pos);
+  const visualLine=countVisualLines(textBefore, w);
+
+  // scrollTop that puts this line at the guide
+  const targetScroll = twPaddingTop + visualLine * lineHeightPx - (guideTopPx - Math.round(lineHeightPx*0.4));
+  w.scrollTop = Math.max(0, targetScroll);
+}
+
+// Count how many visual (wrapped) lines are in `text` given the textarea
+function countVisualLines(text, w){
+  // Characters per line approximation using textarea client width and char width
+  const charsPerLine = charsPerLineEstimate(w);
+  const paragraphs = text.split('\n');
+  let total = 0;
+  for(let i=0; i<paragraphs.length; i++){
+    const len = paragraphs[i].length;
+    total += Math.max(1, Math.ceil(len / charsPerLine));
+    if(i < paragraphs.length-1) {
+      // The newline itself — we already counted the paragraph, the newline moves to next line
+      // (already accounted for since we add one row per paragraph above)
+    }
+  }
+  // The last paragraph doesn't add an extra row for the newline
+  // So subtract the extra one we'd get for the trailing segment
+  // Actually: each split segment is a "row group"; the newline advances us.
+  // total already = sum of wrapped rows per paragraph.
+  // caret is at end of textBefore, so it's on the LAST paragraph's last row.
+  // Number of lines ABOVE caret = total - (rows of last paragraph's last row... which is 1)
+  // Actually total IS the visual line index (0-based: 0 means first line).
+  return Math.max(0, total - 1);
+}
+
+let _cachedCharsPerLine = 0;
+let _cachedWidth = 0;
+function charsPerLineEstimate(w){
+  const clientW = w.clientWidth - colPadLeft*2 - 16; // usable width (minus scroll margin)
+  if(clientW === _cachedWidth && _cachedCharsPerLine > 0) return _cachedCharsPerLine;
+  // Measure one character width using canvas
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const cs = getComputedStyle(w);
+  ctx.font = cs.fontSize + ' ' + cs.fontFamily;
+  const charW = ctx.measureText('M').width; // 'M' is a good average for monospace
+  _cachedWidth = clientW;
+  _cachedCharsPerLine = Math.max(10, Math.floor(clientW / charW));
+  return _cachedCharsPerLine;
+}
+
+// ── Bell sound ────────────────────────────────────────────────────────────
+let lastBellCol = -1;
+function maybeBell(w){
+  if(!S.bell) return;
+  const text=w.value, pos=w.selectionStart;
+  const textBefore=text.substring(0,pos);
+  const lastNL=textBefore.lastIndexOf('\n');
+  const currentLineText=lastNL===-1 ? textBefore : textBefore.substring(lastNL+1);
+  const charsPerLine=charsPerLineEstimate(w);
+  const col=currentLineText.length % charsPerLine;
+  const bellAt=Math.round(charsPerLine*0.8); // ring at 80% of line
+  if(col===bellAt && col!==lastBellCol){ ringBell(); lastBellCol=col; }
+  else if(col < bellAt){ lastBellCol=-1; }
+}
+
+function ringBell(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value=880;
+    osc.type='sine';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.3);
+    osc.start(ctx.currentTime); osc.stop(ctx.currentTime+0.3);
+  }catch(e){}
+}
+
+// ── Settings application ──────────────────────────────────────────────────
+function applyAll(){
+  const w=document.getElementById('writer');
+  w.style.fontSize=(S.fs)+'px';
+  w.style.lineHeight=(S.lh/100).toFixed(2);
+  // Reset char cache
+  _cachedCharsPerLine=0; _cachedWidth=0;
+  measureLineHeight();
+  computeLayout();
+  syncSettingsUI();
+}
+
+function syncSettingsUI(){
+  document.getElementById('tw-r').value=S.tw; document.getElementById('twv').textContent=S.tw+'%';
+  document.getElementById('fs-r').value=S.fs; document.getElementById('fsv').textContent=S.fs+'px';
+  document.getElementById('lh-r').value=S.lh; document.getElementById('lhv').textContent=(S.lh/100).toFixed(2);
+  document.getElementById('mw-r').value=S.mw; document.getElementById('mwv').textContent=S.mw+'px';
+  document.getElementById('tog-g').checked=S.guide;
+  document.getElementById('tog-bell').checked=S.bell;
+  document.getElementById('tog-auto').checked=S.auto;
+}
+
+// ── Google Drive ──────────────────────────────────────────────────────────
+function initGapi(){
+  if(!CLIENT_ID) return;
+  const s=document.createElement('script'); s.src='https://accounts.google.com/gsi/client';
+  s.onload=()=>{
+    tokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:CLIENT_ID, scope:'https://www.googleapis.com/auth/drive.file',
+      callback:r=>{ if(r.access_token){ gToken=r.access_token; localStorage.setItem(TK,gToken); gUI(true); toast('Connected to Drive ✓'); } }
+    });
+    const saved=localStorage.getItem(TK); if(saved){ gToken=saved; gUI(true); }
+  };
+  document.head.appendChild(s);
+}
+function gUI(on){
+  document.getElementById('gdot').className='gdot '+(on?'on':'off');
+  document.getElementById('glbl').textContent=on?'Connected':'Not connected';
+  document.getElementById('g-conn').style.display=on?'none':'block';
+  document.getElementById('g-act').style.display=on?'block':'none';
+  document.getElementById('btn-drive').classList.toggle('on',on);
+}
+async function gReq(path,method='GET',body=null,params={}){
+  const url=new URL('https://www.googleapis.com/drive/v3'+path);
+  Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v));
+  const opts={method,headers:{Authorization:'Bearer '+gToken}};
+  if(body){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(body);}
+  const r=await fetch(url,opts);
+  if(r.status===401){gToken=null;localStorage.removeItem(TK);gUI(false);throw new Error('Token expired');}
+  return r;
+}
+async function getFolderId(){
+  const r=await gReq('/files','GET',null,{q:`name='TypeFlow' and mimeType='application/vnd.google-apps.folder' and trashed=false`,fields:'files(id)'});
+  const d=await r.json(); if(d.files&&d.files.length) return d.files[0].id;
+  const cr=await gReq('/files','POST',{name:'TypeFlow',mimeType:'application/vnd.google-apps.folder'});
+  return (await cr.json()).id;
+}
+async function pushToDrive(){
+  if(!gToken){toast('Not connected');return;}
+  try{
+    toast('Saving…');
+    const fid=await getFolderId();
+    const title=(document.getElementById('doc-title').value||'Untitled').replace(/[\/\\:*?"<>|]/g,'');
+    const content=document.getElementById('writer').value, fname=title+'.txt';
+    const er=await gReq('/files','GET',null,{q:`name='${fname}' and '${fid}' in parents and trashed=false`,fields:'files(id)'});
+    const ex=await er.json();
+    if(ex.files&&ex.files.length){
+      await fetch(`https://www.googleapis.com/upload/drive/v3/files/${ex.files[0].id}?uploadType=media`,{method:'PATCH',headers:{Authorization:'Bearer '+gToken,'Content-Type':'text/plain'},body:content});
+    }else{
+      const bd='tfb', mp=`--${bd}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({name:fname,parents:[fid]})}\r\n--${bd}\r\nContent-Type: text/plain\r\n\r\n${content}\r\n--${bd}--`;
+      await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+gToken,'Content-Type':`multipart/related; boundary=${bd}`},body:mp});
+    }
+    toast('Saved to Drive ✓');
+  }catch(e){toast('Error: '+e.message);}
+}
+async function listDriveFiles(){
+  if(!gToken)return;
+  try{
+    const fid=await getFolderId();
+    const r=await gReq('/files','GET',null,{q:`'${fid}' in parents and trashed=false`,fields:'files(id,name,modifiedTime)',orderBy:'modifiedTime desc'});
+    const d=await r.json(), sec=document.getElementById('g-files'), lst=document.getElementById('gflist');
+    sec.style.display='block';
+    if(!d.files||!d.files.length){lst.innerHTML='<div style="color:var(--ink-dim);font-family:var(--ui);font-size:13px;padding:8px 0">No files</div>';return;}
+    lst.innerHTML=d.files.map(f=>`<div class="fi" data-gid="${f.id}" data-gname="${f.name}"><span class="fn">${f.name}</span><span class="fm">${new Date(f.modifiedTime).toLocaleDateString()}</span></div>`).join('');
+    lst.querySelectorAll('.fi').forEach(el=>el.addEventListener('click',()=>pullFile(el.dataset.gid,el.dataset.gname)));
+  }catch(e){toast('Error: '+e.message);}
+}
+async function pullFile(fid,fname){
+  try{
+    toast('Loading…');
+    const r=await fetch(`https://www.googleapis.com/drive/v3/files/${fid}?alt=media`,{headers:{Authorization:'Bearer '+gToken}});
+    const text=await r.text(); saveDoc();
+    const id=genId(), docs=getDocs();
+    docs[id]={id,title:fname.replace(/\.txt$/,''),content:text,created:Date.now(),updated:Date.now()};
+    putDocs(docs); openDoc(id); closeOverlay(); toast('Loaded ✓');
+  }catch(e){toast('Error: '+e.message);}
+}
+
+// ── Export ────────────────────────────────────────────────────────────────
+function exportFile(ext){
+  const title=document.getElementById('doc-title').value||'Untitled';
+  const content=document.getElementById('writer').value;
+  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([content],{type:'text/plain'})),download:title+'.'+ext});
+  a.click(); URL.revokeObjectURL(a.href); toast('Downloaded as .'+ext);
+}
+
+// ── Toast / Overlay ───────────────────────────────────────────────────────
+let toastT;
+function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),2200); }
+function openPanel(id){ document.getElementById('overlay').classList.add('open'); ['p-docs','p-drive','p-set'].forEach(p=>document.getElementById(p).style.display=p===id?'block':'none'); if(id==='p-docs')renderDocs(); }
+function closeOverlay(){ document.getElementById('overlay').classList.remove('open'); }
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', ()=>{
+  loadS();
+  applyAll();
+
+  const w=document.getElementById('writer');
+
+  // Load most recent doc
+  const docs=getDocs(), ids=Object.keys(docs);
+  if(ids.length){ openDoc(ids.sort((a,b)=>(docs[b].updated||0)-(docs[a].updated||0))[0]); }
+  else{ newDoc(); }
+
+  // ── Core input handler ──
+  w.addEventListener('input', ()=>{
+    updateCounts(); dirty=true; setSave('unsaved');
+    maybeBell(w);
+    requestAnimationFrame(typewriterScroll);
+  });
+
+  // Cursor movement
+  w.addEventListener('keyup', e=>{
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown','Enter'].includes(e.key))
+      requestAnimationFrame(typewriterScroll);
+  });
+  w.addEventListener('click', ()=>requestAnimationFrame(typewriterScroll));
+  w.addEventListener('touchend', ()=>requestAnimationFrame(typewriterScroll));
+
+  // Prevent user from manually scrolling (we own it)
+  w.addEventListener('wheel', e=>e.preventDefault(), {passive:false});
+  w.addEventListener('touchmove', e=>{
+    // Allow only if not inside a panel
+    if(!document.getElementById('overlay').classList.contains('open')) e.preventDefault();
+  }, {passive:false});
+
+  // Topbar buttons
+  document.getElementById('btn-docs').addEventListener('click', ()=>openPanel('p-docs'));
+  document.getElementById('btn-drive').addEventListener('click', ()=>openPanel('p-drive'));
+  document.getElementById('btn-set').addEventListener('click', ()=>openPanel('p-set'));
+  document.getElementById('btn-focus').addEventListener('click', ()=>{
+    document.body.classList.toggle('focus');
+    document.getElementById('btn-focus').classList.toggle('on', document.body.classList.contains('focus'));
+  });
+
+  document.getElementById('doc-title').addEventListener('input', ()=>{ dirty=true; setSave('unsaved'); });
+
+  // Close buttons
+  document.getElementById('x-docs').addEventListener('click', closeOverlay);
+  document.getElementById('x-drive').addEventListener('click', closeOverlay);
+  document.getElementById('x-set').addEventListener('click', ()=>{ saveS(); applyAll(); typewriterScroll(); closeOverlay(); });
+  document.getElementById('overlay').addEventListener('click', e=>{ if(e.target===e.currentTarget){ saveS(); applyAll(); typewriterScroll(); closeOverlay(); }});
+
+  // Doc actions
+  document.getElementById('btn-new').addEventListener('click', ()=>{ saveDoc(); newDoc(); });
+  document.getElementById('btn-etxt').addEventListener('click', ()=>exportFile('txt'));
+  document.getElementById('btn-emd').addEventListener('click', ()=>exportFile('md'));
+
+  // Drive actions
+  document.getElementById('btn-gauth').addEventListener('click', ()=>{ if(!CLIENT_ID){toast('Paste OAuth Client ID in source first');return;} if(tokenClient)tokenClient.requestAccessToken(); });
+  document.getElementById('btn-gpush').addEventListener('click', pushToDrive);
+  document.getElementById('btn-glist').addEventListener('click', listDriveFiles);
+  document.getElementById('btn-gdisc').addEventListener('click', ()=>{ gToken=null;localStorage.removeItem(TK);gUI(false);toast('Disconnected'); });
+
+  // Settings sliders
+  document.getElementById('tw-r').addEventListener('input', e=>{ S.tw=+e.target.value; document.getElementById('twv').textContent=S.tw+'%'; computeLayout(); typewriterScroll(); });
+  document.getElementById('fs-r').addEventListener('input', e=>{ S.fs=+e.target.value; document.getElementById('fsv').textContent=S.fs+'px'; w.style.fontSize=S.fs+'px'; _cachedCharsPerLine=0; measureLineHeight(); computeLayout(); typewriterScroll(); });
+  document.getElementById('lh-r').addEventListener('input', e=>{ S.lh=+e.target.value; document.getElementById('lhv').textContent=(S.lh/100).toFixed(2); w.style.lineHeight=(S.lh/100).toFixed(2); _cachedCharsPerLine=0; measureLineHeight(); computeLayout(); typewriterScroll(); });
+  document.getElementById('mw-r').addEventListener('input', e=>{ S.mw=+e.target.value; document.getElementById('mwv').textContent=S.mw+'px'; _cachedCharsPerLine=0; computeLayout(); });
+  document.getElementById('tog-g').addEventListener('change', e=>{ S.guide=e.target.checked; document.getElementById('guide').style.display=S.guide?'block':'none'; document.getElementById('guide-hl').style.display=S.guide?'block':'none'; });
+  document.getElementById('tog-bell').addEventListener('change', e=>{ S.bell=e.target.checked; });
+  document.getElementById('tog-auto').addEventListener('change', e=>{ S.auto=e.target.checked; });
+
+  // Auto-save
+  setInterval(()=>{ if(S.auto&&dirty) saveDoc(); }, 30000);
+
+  // Cmd/Ctrl+S
+  document.addEventListener('keydown', e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='s'){ e.preventDefault(); saveDoc(); toast('Saved'); } });
+
+  // Resize
+  window.addEventListener('resize', ()=>{ _cachedCharsPerLine=0; measureLineHeight(); computeLayout(); typewriterScroll(); });
+
+  initGapi();
+  setTimeout(()=>{ w.focus(); typewriterScroll(); }, 100);
+});
+</script>
+</body>
+</html>
