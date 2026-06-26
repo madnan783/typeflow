@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TypeFlow</title>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=Libre+Baskerville:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+
+:root{
+  --bg:#f5f0e8;--ink:#1a1612;--ink-mid:#6a6258;--ink-dim:#aaa098;
+  --accent:#7a6a52;--hl:rgba(160,140,100,0.13);--border:#ddd6c8;
+  --ui:-apple-system,'SF Pro Text',system-ui,sans-serif;
+}
+body.dark{
+  --bg:#1c1a16;--ink:#e8e0cc;--ink-mid:#9a9080;--ink-dim:#5a5248;
+  --accent:#c8a96e;--hl:rgba(200,169,110,0.07);--border:#2e2a22;
+}
+html,body{height:100%;background:var(--bg);overflow:hidden;-webkit-text-size-adjust:100%;}
+
+/* ── App shell ── */
+#app{display:flex;flex-direction:column;height:100dvh;height:100vh;background:var(--bg);}
+
+/* ── Topbar ── */
+#topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 16px;gap:8px;border-bottom:1px solid var(--border);
+  flex-shrink:0;z-index:20;transition:opacity .3s;background:var(--bg);
+}
+body.focus-mode #topbar{opacity:0;pointer-events:none;}
+body.focus-mode #topbar:hover{opacity:1;pointer-events:all;}
+.brand{font-family:'Courier Prime','Courier New',monospace;font-size:11px;color:var(--accent);letter-spacing:.16em;text-transform:uppercase;flex-shrink:0;}
+#doc-title{flex:1;background:none;border:none;color:var(--ink-mid);font-family:var(--ui);font-size:13px;text-align:center;outline:none;min-width:0;}
+#doc-title::placeholder{color:var(--ink-dim);}
+#doc-title:focus{color:var(--ink);}
+.tbtns{display:flex;gap:5px;flex-shrink:0;}
+.tbtn{background:none;border:1px solid var(--border);color:var(--ink-mid);border-radius:5px;padding:4px 10px;font-size:12px;cursor:pointer;font-family:var(--ui);white-space:nowrap;transition:color .12s,border-color .12s;}
+.tbtn:hover,.tbtn.on{color:var(--accent);border-color:var(--accent);}
+
+/* ── Editor area ── */
+#editor-area{flex:1;position:relative;overflow:hidden;}
+
+/* Guide line */
+#guide{position:absolute;left:0;right:0;pointer-events:none;z-index:10;display:block;}
+#guide::before{content:'';position:absolute;left:0;right:0;top:0;height:1px;
+  background:linear-gradient(to right,transparent 0%,rgba(122,106,82,0.2) 20%,rgba(122,106,82,0.2) 80%,transparent 100%);}
+
+/* Textarea */
+#writer{
+  position:absolute;inset:0;width:100%;height:100%;
+  resize:none;border:none;outline:none;background:transparent;
+  color:var(--ink);caret-color:var(--accent);
+  font-size:18px;line-height:1.8;
+  overflow-y:scroll;overflow-x:hidden;scrollbar-width:none;
+}
+#writer::-webkit-scrollbar{display:none;}
+#writer::placeholder{color:var(--ink-dim);}
+
+/* Para focus overlay */
+#pf-top,#pf-bot{position:absolute;left:0;right:0;pointer-events:none;z-index:8;background:rgba(0,0,0,0.08);transition:top .08s,height .08s;}
+
+/* ── Status bar ── */
+#statusbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:5px 16px;flex-shrink:0;border-top:1px solid var(--border);
+  background:var(--bg);transition:opacity .3s;position:relative;
+}
+body.focus-mode #statusbar{opacity:0;}
+.stat{font-family:var(--ui);font-size:11px;color:var(--ink-dim);}
+.stat b{color:var(--ink-mid);font-weight:500;}
+#goal-display{font-family:var(--ui);font-size:11px;color:var(--ink-dim);cursor:pointer;transition:color .2s;}
+#goal-display:hover{color:var(--accent);}
+#goal-display.hit{color:#4caf82;}
+
+/* Progress bar */
+#prog-wrap{position:absolute;bottom:0;left:0;right:0;height:2px;pointer-events:none;}
+#prog-bar{height:100%;width:0%;background:var(--accent);opacity:.6;transition:width .4s;}
+#prog-bar.done{background:#4caf82;opacity:.9;}
+
+/* Timer pill */
+#timer-pill{
+  display:none;position:fixed;top:44px;right:14px;
+  background:var(--bg);border:1px solid var(--border);border-radius:20px;
+  padding:4px 13px;font-family:var(--ui);font-size:12px;color:var(--ink-mid);
+  z-index:25;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.08);
+  transition:color .2s,border-color .2s;user-select:none;
+}
+#timer-pill.run{color:var(--accent);border-color:var(--accent);}
+#timer-pill.brk{color:#4caf82;border-color:#4caf82;}
+
+/* ── Overlay ── */
+#overlay{display:none;position:fixed;inset:0;background:rgba(20,18,14,.5);z-index:100;align-items:center;justify-content:center;}
+#overlay.open{display:flex;}
+.panel{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:22px;width:min(360px,94vw);max-height:88vh;overflow-y:auto;box-shadow:0 6px 30px rgba(0,0,0,.12);}
+.ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.ph h2{font-family:var(--ui);font-size:14px;font-weight:600;color:var(--ink);}
+.ph button{background:none;border:none;color:var(--ink-dim);font-size:20px;cursor:pointer;line-height:1;padding:0 3px;}
+.pp{font-family:var(--ui);font-size:13px;color:var(--ink-mid);line-height:1.6;margin-bottom:14px;}
+.plbl{font-family:var(--ui);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-dim);margin-bottom:7px;}
+.psec{margin-bottom:16px;}
+
+/* File list */
+.flist{display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;}
+.fi{display:flex;align-items:center;padding:8px 10px;border-radius:7px;border:1px solid var(--border);cursor:pointer;transition:border-color .12s;}
+.fi:hover{border-color:var(--accent);}
+.fi.cur{border-color:var(--accent);background:rgba(122,106,82,.07);}
+.fn{font-family:var(--ui);font-size:13px;color:var(--ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fm{font-family:var(--ui);font-size:11px;color:var(--ink-dim);margin-left:8px;flex-shrink:0;}
+.fd{background:none;border:none;color:var(--ink-dim);cursor:pointer;font-size:13px;padding:0 0 0 8px;flex-shrink:0;}
+.fd:hover{color:#b84040;}
+
+/* Buttons */
+.bp{display:block;width:100%;padding:10px;background:var(--ink);color:var(--bg);border:none;border-radius:7px;font-family:var(--ui);font-size:13px;font-weight:600;cursor:pointer;text-align:center;margin-top:4px;transition:opacity .12s;}
+.bp:hover{opacity:.82;}
+.bs{display:block;width:100%;padding:9px;background:none;color:var(--ink-mid);border:1px solid var(--border);border-radius:7px;font-family:var(--ui);font-size:13px;cursor:pointer;text-align:center;margin-top:7px;}
+.bs:hover{border-color:var(--ink-mid);color:var(--ink);}
+
+/* Settings rows */
+.srow{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);}
+.srow:last-child{border-bottom:none;}
+.slbl{font-family:var(--ui);font-size:13px;color:var(--ink-mid);}
+.sval{font-family:var(--ui);font-size:12px;color:var(--accent);min-width:40px;text-align:right;}
+input[type=range]{width:100%;accent-color:var(--accent);margin-top:6px;}
+
+/* Toggle */
+.tog{position:relative;width:38px;height:22px;flex-shrink:0;}
+.tog input{opacity:0;width:0;height:0;}
+.tog-t{position:absolute;inset:0;background:var(--border);border-radius:11px;cursor:pointer;transition:background .2s;}
+.tog input:checked+.tog-t{background:var(--accent);}
+.tog-k{position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s;pointer-events:none;}
+.tog input:checked~.tog-k{transform:translateX(16px);}
+
+/* Font grid */
+.font-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;}
+.font-opt{padding:10px 8px;border:1px solid var(--border);border-radius:7px;cursor:pointer;text-align:center;transition:border-color .12s,background .12s;background:none;}
+.font-opt:hover{border-color:var(--accent);}
+.font-opt.sel{border-color:var(--accent);background:rgba(122,106,82,.08);}
+.font-opt .fo-name{font-size:15px;color:var(--ink);display:block;margin-bottom:2px;line-height:1.3;}
+.font-opt .fo-lbl{font-family:var(--ui);font-size:10px;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.06em;}
+
+/* Swatches */
+.swatch-row{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;}
+.swatch{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:border-color .15s,transform .15s;flex-shrink:0;}
+.swatch:hover,.swatch.sel{border-color:var(--accent);transform:scale(1.15);}
+.swatch-plus{width:28px;height:28px;border-radius:50%;border:2px dashed var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--ink-dim);flex-shrink:0;}
+.swatch-plus:hover{border-color:var(--accent);}
+input#custom-color{display:none;}
+
+/* GDrive */
+.gst{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:7px;border:1px solid var(--border);margin-bottom:12px;}
+.gdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.gdot.on{background:#4caf82;}.gdot.off{background:var(--ink-dim);}
+.glbl{font-family:var(--ui);font-size:13px;color:var(--ink-mid);}
+
+/* Toast */
+#toast{position:fixed;bottom:46px;left:50%;transform:translateX(-50%) translateY(8px);background:var(--ink);color:var(--bg);font-family:var(--ui);font-size:12px;padding:7px 16px;border-radius:20px;z-index:300;opacity:0;transition:opacity .18s,transform .18s;pointer-events:none;white-space:nowrap;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <span class="brand">TypeFlow</span>
+    <input id="doc-title" type="text" placeholder="Untitled" autocomplete="off" spellcheck="false">
+    <div class="tbtns">
+      <button class="tbtn" id="btn-docs">Docs</button>
+      <button class="tbtn" id="btn-drive">Drive</button>
+      <button class="tbtn" id="btn-set">Settings</button>
+      <button class="tbtn" id="btn-about">About</button>
+      <button class="tbtn" id="btn-focus">Focus</button>
+    </div>
+  </div>
+
+  <div id="editor-area">
+    <div id="guide"></div>
+    <div id="pf-top" style="display:none"></div>
+    <div id="pf-bot" style="display:none"></div>
+    <textarea id="writer" spellcheck="false" placeholder="Begin writing. The line stays. The words rise."></textarea>
+  </div>
+
+  <div id="statusbar">
+    <span class="stat">words <b id="wc">0</b></span>
+    <span id="goal-display" title="Click to set word goal">—</span>
+    <span class="stat" id="savest">—</span>
+    <span class="stat">chars <b id="cc">0</b></span>
+    <div id="prog-wrap"><div id="prog-bar"></div></div>
+  </div>
+</div>
+
+<div id="timer-pill">🍅 <span id="timer-txt">25:00</span></div>
+
+<div id="overlay">
+
+  <!-- Docs -->
+  <div class="panel" id="p-docs" style="display:none">
+    <div class="ph"><h2>Documents</h2><button id="x-docs">×</button></div>
+    <div class="psec"><div class="plbl">Saved locally</div><div class="flist" id="flist"></div></div>
+    <button class="bp" id="btn-new">+ New document</button>
+    <button class="bs" id="btn-etxt">Export .txt</button>
+    <button class="bs" id="btn-emd">Export .md</button>
+    <button class="bs" id="btn-epdf">Export PDF 📄</button>
+  </div>
+
+  <!-- Drive -->
+  <div class="panel" id="p-drive" style="display:none">
+    <div class="ph"><h2>Google Drive</h2><button id="x-drive">×</button></div>
+    <div class="gst"><div class="gdot off" id="gdot"></div><span class="glbl" id="glbl">Not connected</span></div>
+    <p class="pp">Saves documents as plain text in a <strong>TypeFlow/</strong> folder in your Google Drive.</p>
+    <div id="g-conn"><button class="bp" id="btn-gauth">Connect Google Drive</button></div>
+    <div id="g-act" style="display:none">
+      <button class="bp" id="btn-gpush">Save to Drive ↑</button>
+      <button class="bs" id="btn-glist">Browse Drive files ↓</button>
+      <button class="bs" id="btn-gdisc">Disconnect</button>
+    </div>
+    <div id="g-files" style="display:none;margin-top:14px">
+      <div class="plbl">TypeFlow/ on Drive</div>
+      <div class="flist" id="gflist"></div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="panel" id="p-set" style="display:none">
+    <div class="ph"><h2>Settings</h2><button id="x-set">×</button></div>
+
+    <div class="psec">
+      <div class="plbl">Font style</div>
+      <div class="font-grid" id="font-grid">
+        <button class="font-opt sel" data-font="courier" style="font-family:'Courier Prime','Courier New',monospace"><span class="fo-name">Courier</span><span class="fo-lbl">Typewriter</span></button>
+        <button class="font-opt" data-font="georgia" style="font-family:Georgia,serif"><span class="fo-name">Georgia</span><span class="fo-lbl">Screen serif</span></button>
+        <button class="font-opt" data-font="garamond" style="font-family:'EB Garamond',Garamond,serif"><span class="fo-name">Garamond</span><span class="fo-lbl">Classic</span></button>
+        <button class="font-opt" data-font="baskerville" style="font-family:'Libre Baskerville',Baskerville,serif"><span class="fo-name">Baskerville</span><span class="fo-lbl">Literary</span></button>
+        <button class="font-opt" data-font="playfair" style="font-family:'Playfair Display',serif"><span class="fo-name">Playfair</span><span class="fo-lbl">Elegant</span></button>
+        <button class="font-opt" data-font="lora" style="font-family:'Lora',serif"><span class="fo-name">Lora</span><span class="fo-lbl">Balanced</span></button>
+        <button class="font-opt" data-font="sourceserif" style="font-family:'Source Serif 4',serif"><span class="fo-name">Source Serif</span><span class="fo-lbl">Modern</span></button>
+        <button class="font-opt" data-font="palatino" style="font-family:Palatino,'Book Antiqua',serif"><span class="fo-name">Palatino</span><span class="fo-lbl">Humanist</span></button>
+      </div>
+    </div>
+
+    <div class="psec">
+      <div class="plbl">Typography</div>
+      <div class="srow"><span class="slbl">Font size</span><span class="sval" id="fsv">18px</span></div>
+      <input type="range" id="fs-r" min="14" max="28" value="18" step="1">
+      <div class="srow" style="margin-top:10px"><span class="slbl">Line spacing</span><span class="sval" id="lhv">1.8</span></div>
+      <input type="range" id="lh-r" min="140" max="250" value="180" step="5">
+      <div class="srow" style="margin-top:10px"><span class="slbl">Column width</span><span class="sval" id="mwv">640px</span></div>
+      <input type="range" id="mw-r" min="360" max="900" value="640" step="20">
+      <div class="srow" style="margin-top:10px"><span class="slbl">Typewriter line</span><span class="sval" id="twv">40%</span></div>
+      <input type="range" id="tw-r" min="15" max="70" value="40" step="5">
+    </div>
+
+    <div class="psec">
+      <div class="plbl">Paper colour</div>
+      <div class="swatch-row" id="swatch-row">
+        <div class="swatch sel" data-bg="#f5f0e8" style="background:#f5f0e8" title="Parchment"></div>
+        <div class="swatch" data-bg="#ffffff" style="background:#ffffff;border:1px solid #ddd" title="White"></div>
+        <div class="swatch" data-bg="#f0f4f0" style="background:#f0f4f0" title="Mint"></div>
+        <div class="swatch" data-bg="#f4f0f8" style="background:#f4f0f8" title="Lavender"></div>
+        <div class="swatch" data-bg="#fdf6e3" style="background:#fdf6e3" title="Solarized"></div>
+        <div class="swatch" data-bg="#f5f5dc" style="background:#f5f5dc" title="Beige"></div>
+        <label class="swatch-plus" title="Custom colour">＋<input type="color" id="custom-color" value="#f5f0e8"></label>
+      </div>
+    </div>
+
+    <div class="psec">
+      <div class="plbl">Word goal &amp; timer</div>
+      <div class="srow"><span class="slbl">Daily word goal</span><span class="sval" id="goal-val">off</span></div>
+      <input type="range" id="goal-r" min="0" max="3000" value="0" step="100">
+      <div class="srow" style="margin-top:10px"><span class="slbl">Pomodoro timer</span>
+        <label class="tog"><input type="checkbox" id="tog-timer"><div class="tog-t"></div><div class="tog-k"></div></label>
+      </div>
+      <div class="srow"><span class="slbl">Focus duration</span><span class="sval" id="pomv">25 min</span></div>
+      <input type="range" id="pom-r" min="5" max="60" value="25" step="5">
+    </div>
+
+    <div class="psec">
+      <div class="plbl">Options</div>
+      <div class="srow"><span class="slbl">Dark mode 🌙</span>
+        <label class="tog"><input type="checkbox" id="tog-dark"><div class="tog-t"></div><div class="tog-k"></div></label></div>
+      <div class="srow"><span class="slbl">Guide line</span>
+        <label class="tog"><input type="checkbox" id="tog-guide" checked><div class="tog-t"></div><div class="tog-k"></div></label></div>
+      <div class="srow"><span class="slbl">Paragraph focus</span>
+        <label class="tog"><input type="checkbox" id="tog-pf"><div class="tog-t"></div><div class="tog-k"></div></label></div>
+      <div class="srow"><span class="slbl">Typewriter sounds 🎹</span>
+        <label class="tog"><input type="checkbox" id="tog-bell" checked><div class="tog-t"></div><div class="tog-k"></div></label></div>
+      <div class="srow"><span class="slbl">Carriage return sound</span>
+        <label class="tog"><input type="checkbox" id="tog-cr" checked><div class="tog-t"></div><div class="tog-k"></div></label></div>
+      <div class="srow"><span class="slbl">Auto-save (30s)</span>
+        <label class="tog"><input type="checkbox" id="tog-auto" checked><div class="tog-t"></div><div class="tog-k"></div></label></div>
+      <div class="srow"><span class="slbl">Spell check 🔤</span>
+        <label class="tog"><input type="checkbox" id="tog-spell"><div class="tog-t"></div><div class="tog-k"></div></label></div>
+    </div>
+  </div>
+
+  <!-- About -->
+  <div class="panel" id="p-about" style="display:none">
+    <div class="ph"><h2>About TypeFlow</h2><button id="x-about">×</button></div>
+    <div style="text-align:center;padding:10px 0 18px">
+      <div style="font-family:'Courier Prime',monospace;font-size:26px;color:var(--accent);letter-spacing:.12em">TYPEFLOW</div>
+      <div style="font-family:var(--ui);font-size:11px;color:var(--ink-dim);letter-spacing:.08em;text-transform:uppercase;margin-top:4px">Distraction-Free Writing</div>
+    </div>
+    <p class="pp">A minimal typewriter-mode writing app for focused, distraction-free writing on any device.</p>
+    <div style="border-top:1px solid var(--border);padding-top:14px">
+      <div class="plbl">Developed by</div>
+      <div style="font-family:var(--ui);font-size:15px;font-weight:600;color:var(--ink);margin:6px 0 4px">Muhammad Adnan</div>
+      <div style="font-family:var(--ui);font-size:12px;color:var(--ink-mid);line-height:1.8">
+        Computer Scientist &amp; Applied Researcher<br>
+        MSc Advanced Computer Science, University of Leicester<br>
+        Doctoral Research, Free University of Bozen-Bolzano
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
+      <div class="plbl">Features</div>
+      <div style="font-family:var(--ui);font-size:12px;color:var(--ink-mid);line-height:2">
+        ✦ Typewriter scrolling — cursor stays, words rise<br>
+        ✦ 8 curated font styles<br>
+        ✦ Google Drive sync<br>
+        ✦ Synthesised typewriter sounds<br>
+        ✦ Dark mode &amp; custom paper colour<br>
+        ✦ Word count goals with progress bar<br>
+        ✦ Paragraph focus mode<br>
+        ✦ Pomodoro writing timer<br>
+        ✦ PDF export<br>
+        ✦ Works on iPad, Mac, and any browser
+      </div>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:14px;text-align:center">
+      <div style="font-family:var(--ui);font-size:11px;color:var(--ink-dim)">Version 3.0 · June 2026</div>
+    </div>
+  </div>
+
+</div><!-- end overlay -->
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+// ── Google OAuth ──────────────────────────────────────────────────────────
+const CLIENT_ID = '416878174385-7phg71mo1vshl0oher2vn2n4gja2f9ra.apps.googleusercontent.com';
+
+// ── Settings & state ──────────────────────────────────────────────────────
+const SK='tf_s10', DK='tf_d2', TK='tf_tk';
+let S = {
+  tw:40, fs:18, lh:180, mw:640,
+  guide:true, dark:false, pf:false,
+  bell:true, cr:true, auto:true, spell:false,
+  font:'courier', bg:'#f5f0e8',
+  goal:0, timer:false, pom:25
+};
+let curId=null, dirty=false, gToken=null, tokenClient=null;
+
+function loadS(){ try{ Object.assign(S, JSON.parse(localStorage.getItem(SK)||'{}')); }catch(e){} }
+function saveS(){ localStorage.setItem(SK, JSON.stringify(S)); }
+function getDocs(){ try{ return JSON.parse(localStorage.getItem(DK)||'{}'); }catch(e){ return {}; } }
+function putDocs(d){ localStorage.setItem(DK, JSON.stringify(d)); }
+function genId(){ return 'doc_'+Date.now()+'_'+Math.random().toString(36).slice(2,6); }
+
+// ── Font map ──────────────────────────────────────────────────────────────
+const FONTS = {
+  courier:     "'Courier Prime','Courier New',monospace",
+  georgia:     "Georgia,serif",
+  garamond:    "'EB Garamond',Garamond,serif",
+  baskerville: "'Libre Baskerville',Baskerville,serif",
+  playfair:    "'Playfair Display',serif",
+  lora:        "'Lora',serif",
+  sourceserif: "'Source Serif 4','Source Serif Pro',serif",
+  palatino:    "Palatino,'Book Antiqua',serif",
+};
+
+// ── Typewriter metrics ─────────────────────────────────────────────────────
+let lineHeightPx=32, guideTopPx=0, twPaddingTop=0, colPadLeft=20;
+let _cachedCharsPerLine=0, _cachedWidth=0;
+
+function measureLineHeight(){
+  const w=document.getElementById('writer');
+  const tmp=document.createElement('textarea');
+  const cs=getComputedStyle(w);
+  tmp.style.cssText=`position:absolute;top:-9999px;left:-9999px;visibility:hidden;
+    font-family:${cs.fontFamily};font-size:${cs.fontSize};
+    line-height:${cs.lineHeight};letter-spacing:${cs.letterSpacing};
+    padding:0;border:none;outline:none;resize:none;
+    width:${w.clientWidth}px;white-space:pre-wrap;word-break:break-word;`;
+  document.body.appendChild(tmp);
+  tmp.value='A\nB'; const h2=tmp.scrollHeight;
+  tmp.value='A';    const h1=tmp.scrollHeight;
+  document.body.removeChild(tmp);
+  lineHeightPx = h2 - h1;
+  if(lineHeightPx < 10) lineHeightPx = S.fs * (S.lh/100);
+}
+
+function computeLayout(){
+  const area=document.getElementById('editor-area');
+  const areaH=area.clientHeight;
+  guideTopPx = Math.round(areaH * S.tw / 100);
+  const areaW=area.clientWidth;
+  const colW=Math.min(S.mw, areaW);
+  colPadLeft=Math.max(20, Math.round((areaW-colW)/2));
+  const w=document.getElementById('writer');
+  twPaddingTop=Math.max(0, guideTopPx - Math.round(lineHeightPx*0.4));
+  w.style.paddingTop    = twPaddingTop + 'px';
+  w.style.paddingBottom = (areaH - guideTopPx + lineHeightPx*2) + 'px';
+  w.style.paddingLeft   = colPadLeft + 'px';
+  w.style.paddingRight  = colPadLeft + 'px';
+  const guide=document.getElementById('guide');
+  guide.style.top=guideTopPx+'px';
+  guide.style.display=S.guide?'block':'none';
+  let hl=document.getElementById('guide-hl');
+  if(!hl){ hl=document.createElement('div'); hl.id='guide-hl';
+    hl.style.cssText='position:fixed;left:0;right:0;pointer-events:none;z-index:9;background:var(--hl);';
+    document.body.appendChild(hl); }
+  hl.style.top=(guideTopPx - Math.round(lineHeightPx*0.55))+'px';
+  hl.style.height=Math.round(lineHeightPx*1.1)+'px';
+  hl.style.display=S.guide?'block':'none';
+}
+
+// ── Typewriter scroll ──────────────────────────────────────────────────────
+function charsPerLineEstimate(w){
+  const clientW = w.clientWidth - colPadLeft*2 - 16;
+  if(clientW === _cachedWidth && _cachedCharsPerLine > 0) return _cachedCharsPerLine;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const cs = getComputedStyle(w);
+  ctx.font = cs.fontSize + ' ' + cs.fontFamily;
+  const charW = ctx.measureText('M').width;
+  _cachedWidth = clientW;
+  _cachedCharsPerLine = Math.max(10, Math.floor(clientW / charW));
+  return _cachedCharsPerLine;
+}
+
+function countVisualLines(text, w){
+  const charsPerLine = charsPerLineEstimate(w);
+  const paragraphs = text.split('\n');
+  let total = 0;
+  for(let i=0; i<paragraphs.length; i++){
+    const len = paragraphs[i].length;
+    total += Math.max(1, Math.ceil(len / charsPerLine));
+  }
+  return Math.max(0, total - 1);
+}
+
+function typewriterScroll(){
+  const w=document.getElementById('writer');
+  const text=w.value;
+  const pos=w.selectionStart;
+  const textBefore=text.substring(0, pos);
+  const visualLine=countVisualLines(textBefore, w);
+  const targetScroll = twPaddingTop + visualLine * lineHeightPx - (guideTopPx - Math.round(lineHeightPx*0.4));
+  w.scrollTop = Math.max(0, targetScroll);
+  if(S.pf) pfUpdate();
+}
+
+// ── Paragraph focus ────────────────────────────────────────────────────────
+function pfUpdate(){
+  const top=document.getElementById('pf-top');
+  const bot=document.getElementById('pf-bot');
+  if(!S.pf){ top.style.display=bot.style.display='none'; return; }
+  // Use guideTopPx which is relative to editor-area (absolute positioned children)
+  const lh=lineHeightPx;
+  const bandTop = Math.max(0, guideTopPx - Math.round(lh*1.0));
+  const bandBot = guideTopPx + Math.round(lh*1.0);
+  const areaH = document.getElementById('editor-area').clientHeight;
+  top.style.display='block';
+  top.style.top='0';
+  top.style.height=bandTop+'px';
+  bot.style.display='block';
+  bot.style.top=bandBot+'px';
+  bot.style.height=(areaH-bandBot)+'px';
+}
+
+// ── Counts & goal ──────────────────────────────────────────────────────────
+function wc(t){ return (t||'').trim().split(/\s+/).filter(Boolean).length; }
+
+function updateCounts(){
+  const t=document.getElementById('writer').value;
+  const words=wc(t);
+  document.getElementById('wc').textContent=words;
+  document.getElementById('cc').textContent=t.length;
+  // Goal
+  const gd=document.getElementById('goal-display');
+  const bar=document.getElementById('prog-bar');
+  if(!S.goal){ gd.textContent='—'; gd.classList.remove('hit'); bar.style.width='0%'; bar.classList.remove('done'); return; }
+  const pct=Math.min(100,Math.round(words/S.goal*100));
+  gd.textContent=words+'/'+S.goal+' ('+pct+'%)';
+  const hit=words>=S.goal;
+  gd.classList.toggle('hit',hit);
+  bar.style.width=pct+'%';
+  bar.classList.toggle('done',hit);
+}
+
+function setSave(msg){ const el=document.getElementById('savest'); el.textContent=msg; el.style.color=msg==='unsaved'?'var(--accent)':'var(--ink-dim)'; }
+
+// ── Documents ──────────────────────────────────────────────────────────────
+function newDoc(){
+  if(curId&&dirty) saveDoc();
+  const id=genId(), docs=getDocs();
+  docs[id]={id,title:'Untitled',content:'',created:Date.now(),updated:Date.now()};
+  putDocs(docs); openDoc(id); closeOv();
+}
+
+function openDoc(id){
+  const docs=getDocs(), doc=docs[id]; if(!doc) return;
+  if(curId&&dirty) saveDoc();
+  curId=id;
+  document.getElementById('doc-title').value=doc.title;
+  const w=document.getElementById('writer');
+  w.value=doc.content;
+  dirty=false; setSave('Saved'); updateCounts();
+  requestAnimationFrame(()=>{ w.scrollTop=0; typewriterScroll(); });
+}
+
+function saveDoc(){
+  if(!curId) return;
+  const docs=getDocs();
+  if(!docs[curId]) docs[curId]={id:curId,created:Date.now()};
+  docs[curId].title=document.getElementById('doc-title').value||'Untitled';
+  docs[curId].content=document.getElementById('writer').value;
+  docs[curId].updated=Date.now();
+  putDocs(docs); dirty=false; setSave('Saved');
+}
+
+function delDoc(id){
+  const docs=getDocs(); delete docs[id]; putDocs(docs);
+  if(curId===id){
+    const rem=Object.keys(docs);
+    rem.length ? openDoc(rem.sort((a,b)=>(docs[b].updated||0)-(docs[a].updated||0))[0]) : newDoc();
+  }
+  renderDocs();
+}
+
+function renderDocs(){
+  const docs=getDocs(), list=document.getElementById('flist');
+  const sorted=Object.values(docs).sort((a,b)=>(b.updated||0)-(a.updated||0));
+  if(!sorted.length){ list.innerHTML='<div style="color:var(--ink-dim);font-family:var(--ui);font-size:13px;padding:8px 0">No documents</div>'; return; }
+  list.innerHTML=sorted.map(d=>`<div class="fi ${d.id===curId?'cur':''}" data-id="${d.id}"><span class="fn">${d.title||'Untitled'}</span><span class="fm">${wc(d.content)}w</span><button class="fd" data-del="${d.id}">✕</button></div>`).join('');
+  list.querySelectorAll('.fi').forEach(el=>el.addEventListener('click',e=>{ if(e.target.dataset.del) return; openDoc(el.dataset.id); closeOv(); }));
+  list.querySelectorAll('.fd').forEach(btn=>btn.addEventListener('click',e=>{ e.stopPropagation(); if(confirm('Delete?')) delDoc(btn.dataset.del); }));
+}
+
+// ── Apply all settings ─────────────────────────────────────────────────────
+function applyAll(){
+  const w=document.getElementById('writer');
+  w.style.fontSize=S.fs+'px';
+  w.style.lineHeight=(S.lh/100).toFixed(2);
+  w.style.fontFamily=FONTS[S.font]||FONTS.courier;
+  document.body.classList.toggle('dark',S.dark);
+  document.getElementById('writer').spellcheck=S.spell;
+  if(!S.dark) document.documentElement.style.setProperty('--bg',S.bg);
+  _cachedCharsPerLine=0; _cachedWidth=0;
+  measureLineHeight();
+  computeLayout();
+  pfUpdate();
+  applyTimerVis();
+  syncUI();
+}
+
+function syncUI(){
+  document.getElementById('fs-r').value=S.fs; document.getElementById('fsv').textContent=S.fs+'px';
+  document.getElementById('lh-r').value=S.lh; document.getElementById('lhv').textContent=(S.lh/100).toFixed(2);
+  document.getElementById('mw-r').value=S.mw; document.getElementById('mwv').textContent=S.mw+'px';
+  document.getElementById('tw-r').value=S.tw; document.getElementById('twv').textContent=S.tw+'%';
+  document.getElementById('goal-r').value=S.goal; document.getElementById('goal-val').textContent=S.goal?S.goal+' words':'off';
+  document.getElementById('pom-r').value=S.pom;  document.getElementById('pomv').textContent=S.pom+' min';
+  document.getElementById('tog-dark').checked=S.dark;
+  document.getElementById('tog-guide').checked=S.guide;
+  document.getElementById('tog-pf').checked=S.pf;
+  document.getElementById('tog-bell').checked=S.bell;
+  document.getElementById('tog-cr').checked=S.cr;
+  document.getElementById('tog-auto').checked=S.auto;
+  document.getElementById('tog-timer').checked=S.timer;
+  document.getElementById('tog-spell').checked=S.spell;
+  document.querySelectorAll('.font-opt').forEach(b=>b.classList.toggle('sel',b.dataset.font===S.font));
+  document.querySelectorAll('.swatch').forEach(s=>s.classList.toggle('sel',s.dataset.bg===S.bg));
+}
+
+// ── Pomodoro ───────────────────────────────────────────────────────────────
+let pomSec=0, pomBreak=false, pomRun=false, pomIv=null;
+
+function applyTimerVis(){
+  const pill=document.getElementById('timer-pill');
+  pill.style.display=S.timer?'block':'none';
+  if(S.timer && !pomRun && pomSec===0) pomStart();
+  if(!S.timer){ clearInterval(pomIv); pomRun=false; pomSec=0; }
+}
+
+function pomStart(){
+  pomSec=S.pom*60; pomBreak=false; pomRun=true;
+  document.getElementById('timer-pill').className='run';
+  renderPom(); clearInterval(pomIv);
+  pomIv=setInterval(()=>{
+    if(!pomRun) return;
+    pomSec--;
+    renderPom();
+    if(pomSec<=0){
+      clearInterval(pomIv);
+      if(!pomBreak){ toast('⏱ Session done! 5-min break.'); pomBreak=true; pomSec=300; document.getElementById('timer-pill').className='brk'; renderPom(); pomIv=setInterval(arguments.callee,1000); }
+      else{ toast('☕ Break over! Starting again.'); pomStart(); }
+    }
+  },1000);
+}
+
+function renderPom(){
+  const m=Math.floor(pomSec/60).toString().padStart(2,'0');
+  const s=(pomSec%60).toString().padStart(2,'0');
+  document.getElementById('timer-txt').textContent=m+':'+s;
+  document.querySelector('#timer-pill').firstChild.textContent=pomBreak?'☕ ':'🍅 ';
+}
+
+// ── Export ─────────────────────────────────────────────────────────────────
+function exportTxt(ext){
+  const title=document.getElementById('doc-title').value||'Untitled';
+  const a=Object.assign(document.createElement('a'),{
+    href:URL.createObjectURL(new Blob([document.getElementById('writer').value],{type:'text/plain'})),
+    download:title+'.'+ext
+  });
+  a.click(); URL.revokeObjectURL(a.href); toast('Downloaded as .'+ext);
+}
+
+function exportPDF(){
+  const title=document.getElementById('doc-title').value||'Untitled';
+  const body=document.getElementById('writer').value.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const font=FONTS[S.font]||FONTS.courier;
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=EB+Garamond&family=Lora&family=Playfair+Display&family=Libre+Baskerville&family=Source+Serif+4&display=swap" rel="stylesheet">
+<style>body{font-family:${font};font-size:13pt;line-height:1.9;color:#1a1612;max-width:680px;margin:60px auto;padding:0 40px;}h1{font-size:18pt;margin-bottom:32px;}pre{white-space:pre-wrap;font-family:inherit;}</style>
+</head><body><h1>${title}</h1><pre>${body}</pre></body></html>`;
+  const win=window.open('','_blank');
+  if(!win){ toast('Allow popups to export PDF'); return; }
+  win.document.write(html); win.document.close();
+  win.onload=()=>{ win.focus(); win.print(); };
+  toast('Print dialog — choose Save as PDF');
+}
+
+// ── Sound engine ───────────────────────────────────────────────────────────
+let audioCtx=null, audioOK=false;
+
+function getCtx(){
+  if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  return audioCtx;
+}
+function unlockAudio(){
+  if(audioOK) return;
+  try{
+    const ctx=getCtx();
+    const b=ctx.createBuffer(1,1,ctx.sampleRate);
+    const s=ctx.createBufferSource(); s.buffer=b; s.connect(ctx.destination); s.start(0);
+    ctx.resume().then(()=>audioOK=true);
+  }catch(e){}
+}
+
+function playKey(type){
+  if(!S.bell) return;
+  try{
+    const ctx=getCtx(), t=ctx.currentTime;
+    if(type==='enter'){
+      if(!S.cr){ thunk(ctx,t,0.28,180,0.07); nz(ctx,t,0.18,800,4000,0.055); return; }
+      thunk(ctx,t,0.55,60,0.18); thunk(ctx,t+0.04,0.3,120,0.12);
+      nzSweep(ctx,t+0.08,0.25,200,800,0.22); bell(ctx,t+0.15); return;
+    }
+    if(type==='space'){ thunk(ctx,t,0.35,80,0.13); nz(ctx,t,0.15,400,1200,0.09); return; }
+    if(type==='back'){  thunk(ctx,t,0.25,150,0.08); nz(ctx,t,0.12,600,2000,0.06); return; }
+    const pv=0.85+Math.random()*0.3, vv=0.8+Math.random()*0.4;
+    thunk(ctx,t,0.28*vv,180*pv,0.07); nz(ctx,t,0.18*vv,800*pv,4000*pv,0.055);
+    click(ctx,t+0.008,0.12*vv,3000*pv);
+  }catch(e){}
+}
+
+function thunk(ctx,w,vol,freq,dur){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.connect(g);g.connect(ctx.destination);o.type='sine';
+  o.frequency.setValueAtTime(freq,w);o.frequency.exponentialRampToValueAtTime(freq*0.3,w+dur);
+  g.gain.setValueAtTime(vol,w);g.gain.exponentialRampToValueAtTime(0.001,w+dur);
+  o.start(w);o.stop(w+dur+0.01);
+}
+function nz(ctx,w,vol,f1,f2,dur){
+  const n=Math.max(512,Math.ceil(ctx.sampleRate*dur));
+  const b=ctx.createBuffer(1,n,ctx.sampleRate);
+  const d=b.getChannelData(0); for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+  const s=ctx.createBufferSource();s.buffer=b;
+  const f=ctx.createBiquadFilter();f.type='bandpass';f.frequency.value=(f1+f2)/2;f.Q.value=0.8;
+  const g=ctx.createGain();s.connect(f);f.connect(g);g.connect(ctx.destination);
+  g.gain.setValueAtTime(vol,w);g.gain.exponentialRampToValueAtTime(0.001,w+dur);
+  s.start(w);s.stop(w+dur+0.01);
+}
+function nzSweep(ctx,w,vol,f1,f2,dur){
+  const n=Math.max(512,Math.ceil(ctx.sampleRate*dur));
+  const b=ctx.createBuffer(1,n,ctx.sampleRate);
+  const d=b.getChannelData(0); for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+  const s=ctx.createBufferSource();s.buffer=b;
+  const f=ctx.createBiquadFilter();f.type='bandpass';f.Q.value=1.2;
+  f.frequency.setValueAtTime(f1,w);f.frequency.exponentialRampToValueAtTime(f2,w+dur);
+  const g=ctx.createGain();s.connect(f);f.connect(g);g.connect(ctx.destination);
+  g.gain.setValueAtTime(vol,w);g.gain.exponentialRampToValueAtTime(0.001,w+dur);
+  s.start(w);s.stop(w+dur+0.01);
+}
+function click(ctx,w,vol,freq){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.connect(g);g.connect(ctx.destination);o.type='square';o.frequency.value=freq;
+  g.gain.setValueAtTime(vol,w);g.gain.exponentialRampToValueAtTime(0.001,w+0.025);
+  o.start(w);o.stop(w+0.03);
+}
+function bell(ctx,w){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.connect(g);g.connect(ctx.destination);o.type='sine';o.frequency.value=1047;
+  g.gain.setValueAtTime(0.4,w);g.gain.exponentialRampToValueAtTime(0.001,w+0.6);
+  o.start(w);o.stop(w+0.65);
+}
+
+// ── Google Drive ───────────────────────────────────────────────────────────
+function initGapi(){
+  if(!CLIENT_ID) return;
+  const s=document.createElement('script');s.src='https://accounts.google.com/gsi/client';
+  s.onload=()=>{
+    tokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:CLIENT_ID,scope:'https://www.googleapis.com/auth/drive.file',
+      callback:r=>{ if(r.access_token){ gToken=r.access_token; localStorage.setItem(TK,gToken); gUI(true); toast('Connected to Drive ✓'); } }
+    });
+    const sv=localStorage.getItem(TK); if(sv){ gToken=sv; gUI(true); }
+  };
+  document.head.appendChild(s);
+}
+function gUI(on){
+  document.getElementById('gdot').className='gdot '+(on?'on':'off');
+  document.getElementById('glbl').textContent=on?'Connected':'Not connected';
+  document.getElementById('g-conn').style.display=on?'none':'block';
+  document.getElementById('g-act').style.display=on?'block':'none';
+}
+async function gReq(path,method='GET',body=null,params={}){
+  const url=new URL('https://www.googleapis.com/drive/v3'+path);
+  Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,v));
+  const opts={method,headers:{Authorization:'Bearer '+gToken}};
+  if(body){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(body);}
+  const r=await fetch(url,opts);
+  if(r.status===401){gToken=null;localStorage.removeItem(TK);gUI(false);throw new Error('Token expired');}
+  return r;
+}
+async function getFolderId(){
+  const r=await gReq('/files','GET',null,{q:"name='TypeFlow' and mimeType='application/vnd.google-apps.folder' and trashed=false",fields:'files(id)'});
+  const d=await r.json(); if(d.files&&d.files.length) return d.files[0].id;
+  const cr=await gReq('/files','POST',{name:'TypeFlow',mimeType:'application/vnd.google-apps.folder'});
+  return (await cr.json()).id;
+}
+async function pushToDrive(){
+  if(!gToken){toast('Not connected');return;}
+  try{
+    toast('Saving…');
+    const fid=await getFolderId();
+    const title=(document.getElementById('doc-title').value||'Untitled').replace(/[\/\\:*?"<>|]/g,'');
+    const body=document.getElementById('writer').value;
+    const GDOC_MIME='application/vnd.google-apps.document';
+
+    // Search for existing Google Doc with this title in TypeFlow folder
+    const er=await gReq('/files','GET',null,{
+      q:`name='${title}' and mimeType='${GDOC_MIME}' and '${fid}' in parents and trashed=false`,
+      fields:'files(id,name)'
+    });
+    const ex=await er.json();
+
+    if(ex.files&&ex.files.length){
+      // Update existing Google Doc content
+      const fileId=ex.files[0].id;
+      await fetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart&convert=true`,
+        {method:'PATCH',
+         headers:{Authorization:'Bearer '+gToken,
+                  'Content-Type':'multipart/related; boundary=tfb'},
+         body:`--tfb\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({name:title,mimeType:GDOC_MIME})}\r\n--tfb\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body}\r\n--tfb--`
+        }
+      );
+      toast('Updated in Google Drive ✓');
+    }else{
+      // Create new Google Doc (Drive auto-converts text/plain → Google Doc)
+      const boundary='tfb';
+      const meta=JSON.stringify({name:title,mimeType:GDOC_MIME,parents:[fid]});
+      const mp=`--${boundary}\r\nContent-Type: application/json; charset=utf-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body}\r\n--${boundary}--`;
+      const res=await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+        {method:'POST',
+         headers:{Authorization:'Bearer '+gToken,
+                  'Content-Type':`multipart/related; boundary=${boundary}`},
+         body:mp}
+      );
+      const created=await res.json();
+      toast('Saved as Google Doc ✓');
+    }
+  }catch(e){toast('Error: '+e.message);}
+}
+async function listDrive(){
+  if(!gToken) return;
+  try{
+    const fid=await getFolderId();
+    // List Google Docs in TypeFlow folder
+    const GDOC_MIME='application/vnd.google-apps.document';
+    const r=await gReq('/files','GET',null,{
+      q:`'${fid}' in parents and trashed=false`,
+      fields:'files(id,name,modifiedTime,mimeType)',
+      orderBy:'modifiedTime desc'
+    });
+    const d=await r.json(), sec=document.getElementById('g-files'), lst=document.getElementById('gflist');
+    sec.style.display='block';
+    if(!d.files||!d.files.length){
+      lst.innerHTML='<div style="color:var(--ink-dim);font-family:var(--ui);font-size:13px;padding:8px 0">No files yet</div>';
+      return;
+    }
+    lst.innerHTML=d.files.map(f=>{
+      // Google Doc URL — works for both native Docs and converted files
+      const docsUrl=`https://docs.google.com/document/d/${f.id}/edit`;
+      return `<div class="fi" style="flex-direction:column;align-items:flex-start;gap:6px">
+        <div style="display:flex;align-items:center;width:100%;gap:8px">
+          <span class="fn">${f.name}</span>
+          <span class="fm">${new Date(f.modifiedTime).toLocaleDateString()}</span>
+        </div>
+        <div style="display:flex;gap:6px;width:100%">
+          <button class="fi-load" data-gid="${f.id}" data-gname="${f.name}" data-mime="${f.mimeType}"
+            style="flex:1;padding:4px 8px;font-family:var(--ui);font-size:11px;background:var(--ink);color:var(--bg);border:none;border-radius:5px;cursor:pointer;">
+            ← Load to TypeFlow
+          </button>
+          <a href="${docsUrl}" target="_blank"
+            style="flex:1;padding:4px 8px;font-family:var(--ui);font-size:11px;background:none;color:var(--accent);border:1px solid var(--border);border-radius:5px;cursor:pointer;text-decoration:none;text-align:center;">
+            Edit in Docs ↗
+          </a>
+        </div>
+      </div>`;
+    }).join('');
+    lst.querySelectorAll('.fi-load').forEach(btn=>btn.addEventListener('click',e=>{
+      e.stopPropagation();
+      pullFile(btn.dataset.gid, btn.dataset.gname, btn.dataset.mime);
+    }));
+  }catch(e){toast('Error: '+e.message);}
+}
+async function pullFile(fid, fname, mime){
+  try{
+    toast('Loading from Drive…');
+    const GDOC_MIME='application/vnd.google-apps.document';
+    let text='';
+    if(mime===GDOC_MIME){
+      // Export Google Doc as plain text
+      const r=await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fid}/export?mimeType=text/plain`,
+        {headers:{Authorization:'Bearer '+gToken}}
+      );
+      text=await r.text();
+    }else{
+      // Plain text file — download directly
+      const r=await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fid}?alt=media`,
+        {headers:{Authorization:'Bearer '+gToken}}
+      );
+      text=await r.text();
+    }
+    // Strip Google Docs export artifacts (BOM, trailing whitespace)
+    text=text.replace(/^\uFEFF/,'').trim();
+    saveDoc();
+    const id=genId(), localDocs=getDocs();
+    const title=fname.replace(/\.txt$/,'').replace(/\.gdoc$/,'');
+    localDocs[id]={id,title,content:text,created:Date.now(),updated:Date.now()};
+    putDocs(localDocs); openDoc(id); closeOv();
+    toast('Loaded from Drive ✓');
+  }catch(e){toast('Error: '+e.message);}
+}
+
+// ── Toast / Overlay ────────────────────────────────────────────────────────
+let toastT;
+function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),2400); }
+function openOv(id){ document.getElementById('overlay').classList.add('open'); ['p-docs','p-drive','p-set','p-about'].forEach(p=>document.getElementById(p).style.display=p===id?'block':'none'); if(id==='p-docs') renderDocs(); }
+function closeOv(){ document.getElementById('overlay').classList.remove('open'); }
+
+// ── Bootstrap ──────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', ()=>{
+  loadS();
+  S.pf = false; // always start with para focus off
+
+  // First paint: apply styles before measuring
+  const w=document.getElementById('writer');
+  w.style.fontSize=S.fs+'px';
+  w.style.lineHeight=(S.lh/100).toFixed(2);
+  w.style.fontFamily=FONTS[S.font]||FONTS.courier;
+  document.body.classList.toggle('dark',S.dark);
+  document.getElementById('writer').spellcheck=S.spell;
+  if(!S.dark) document.documentElement.style.setProperty('--bg',S.bg);
+
+  // Load doc
+  const docs=getDocs(), ids=Object.keys(docs);
+  if(ids.length) openDoc(ids.sort((a,b)=>(docs[b].updated||0)-(docs[a].updated||0))[0]);
+  else newDoc();
+
+  // Measure and layout after paint
+  setTimeout(()=>{
+    _cachedCharsPerLine=0; _cachedWidth=0;
+    measureLineHeight(); computeLayout(); syncUI();
+    applyTimerVis(); pfUpdate();
+    typewriterScroll();
+  }, 80);
+
+  // ── Keyboard sounds unlock (Safari) ──
+  ['touchstart','mousedown','keydown'].forEach(ev=>
+    document.addEventListener(ev, unlockAudio, {once:true, passive:true})
+  );
+
+  // ── Writer events ──
+  w.addEventListener('keydown', e=>{
+    unlockAudio();
+    if(['Shift','Control','Alt','Meta','CapsLock','Tab','Escape','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'].includes(e.key)) return;
+    if(e.metaKey||e.ctrlKey) return;
+    if(e.key==='Enter')                            playKey('enter');
+    else if(e.key===' ')                           playKey('space');
+    else if(e.key==='Backspace'||e.key==='Delete') playKey('back');
+    else                                           playKey('key');
+  });
+
+  w.addEventListener('input', ()=>{
+    dirty=true; setSave('unsaved'); updateCounts();
+    requestAnimationFrame(typewriterScroll);
+  });
+
+  w.addEventListener('keyup', e=>{
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','PageUp','PageDown','Enter'].includes(e.key))
+      typewriterScroll();
+  });
+  w.addEventListener('click', ()=>typewriterScroll());
+  w.addEventListener('touchend', ()=>typewriterScroll());
+  w.addEventListener('wheel', e=>e.preventDefault(), {passive:false});
+  w.addEventListener('touchmove', e=>{ if(!document.getElementById('overlay').classList.contains('open')) e.preventDefault(); }, {passive:false});
+
+  // ── Topbar buttons ──
+  document.getElementById('btn-docs').addEventListener('click', ()=>openOv('p-docs'));
+  document.getElementById('btn-drive').addEventListener('click', ()=>openOv('p-drive'));
+  document.getElementById('btn-set').addEventListener('click', ()=>openOv('p-set'));
+  document.getElementById('btn-about').addEventListener('click', ()=>openOv('p-about'));
+  document.getElementById('btn-focus').addEventListener('click', ()=>{
+    document.body.classList.toggle('focus-mode');
+    document.getElementById('btn-focus').classList.toggle('on', document.body.classList.contains('focus-mode'));
+  });
+
+  document.getElementById('doc-title').addEventListener('input', ()=>{ dirty=true; setSave('unsaved'); });
+
+  // ── Overlay closes ──
+  document.getElementById('x-docs').addEventListener('click', closeOv);
+  document.getElementById('x-drive').addEventListener('click', closeOv);
+  document.getElementById('x-set').addEventListener('click', ()=>{ saveS(); closeOv(); });
+  document.getElementById('x-about').addEventListener('click', closeOv);
+  document.getElementById('overlay').addEventListener('click', e=>{ if(e.target===e.currentTarget){ saveS(); closeOv(); } });
+
+  // ── Docs panel ──
+  document.getElementById('btn-new').addEventListener('click', ()=>{ saveDoc(); newDoc(); });
+  document.getElementById('btn-etxt').addEventListener('click', ()=>exportTxt('txt'));
+  document.getElementById('btn-emd').addEventListener('click', ()=>exportTxt('md'));
+  document.getElementById('btn-epdf').addEventListener('click', exportPDF);
+
+  // ── Drive panel ──
+  document.getElementById('btn-gauth').addEventListener('click', ()=>{ if(!CLIENT_ID){toast('No OAuth Client ID configured');return;} if(tokenClient) tokenClient.requestAccessToken(); });
+  document.getElementById('btn-gpush').addEventListener('click', pushToDrive);
+  document.getElementById('btn-glist').addEventListener('click', listDrive);
+  document.getElementById('btn-gdisc').addEventListener('click', ()=>{ gToken=null; localStorage.removeItem(TK); gUI(false); toast('Disconnected'); });
+
+  // ── Settings: typography sliders ──
+  document.getElementById('fs-r').addEventListener('input', e=>{
+    S.fs=+e.target.value; document.getElementById('fsv').textContent=S.fs+'px';
+    w.style.fontSize=S.fs+'px'; _cachedCharsPerLine=0; measureLineHeight(); computeLayout(); typewriterScroll();
+  });
+  document.getElementById('lh-r').addEventListener('input', e=>{
+    S.lh=+e.target.value; document.getElementById('lhv').textContent=(S.lh/100).toFixed(2);
+    w.style.lineHeight=(S.lh/100).toFixed(2); _cachedCharsPerLine=0; measureLineHeight(); computeLayout(); typewriterScroll();
+  });
+  document.getElementById('mw-r').addEventListener('input', e=>{
+    S.mw=+e.target.value; document.getElementById('mwv').textContent=S.mw+'px'; _cachedCharsPerLine=0; computeLayout();
+  });
+  document.getElementById('tw-r').addEventListener('input', e=>{
+    S.tw=+e.target.value; document.getElementById('twv').textContent=S.tw+'%'; computeLayout(); typewriterScroll();
+  });
+
+  // ── Settings: font grid ──
+  document.getElementById('font-grid').addEventListener('click', e=>{
+    const btn=e.target.closest('.font-opt'); if(!btn) return;
+    S.font=btn.dataset.font; w.style.fontFamily=FONTS[S.font]||FONTS.courier;
+    document.querySelectorAll('.font-opt').forEach(b=>b.classList.toggle('sel',b.dataset.font===S.font));
+    _cachedCharsPerLine=0; measureLineHeight(); computeLayout(); typewriterScroll(); saveS();
+  });
+
+  // ── Settings: swatches ──
+  document.getElementById('swatch-row').addEventListener('click', e=>{
+    const sw=e.target.closest('.swatch'); if(!sw) return;
+    S.bg=sw.dataset.bg; document.documentElement.style.setProperty('--bg',S.bg);
+    document.querySelectorAll('.swatch').forEach(s=>s.classList.toggle('sel',s.dataset.bg===S.bg));
+    saveS();
+  });
+  document.getElementById('custom-color').addEventListener('input', e=>{
+    S.bg=e.target.value; document.documentElement.style.setProperty('--bg',S.bg);
+    document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('sel')); saveS();
+  });
+
+  // ── Settings: goal & timer ──
+  document.getElementById('goal-r').addEventListener('input', e=>{
+    S.goal=+e.target.value; document.getElementById('goal-val').textContent=S.goal?S.goal+' words':'off'; updateCounts();
+  });
+  document.getElementById('tog-timer').addEventListener('change', e=>{ S.timer=e.target.checked; applyTimerVis(); saveS(); });
+  document.getElementById('pom-r').addEventListener('input', e=>{
+    S.pom=+e.target.value; document.getElementById('pomv').textContent=S.pom+' min';
+    if(S.timer){ clearInterval(pomIv); pomSec=0; pomStart(); }
+  });
+  document.getElementById('timer-pill').addEventListener('click', ()=>{
+    pomRun=!pomRun;
+    const pill=document.getElementById('timer-pill');
+    if(pomRun){ pill.className=pomBreak?'brk':'run'; pomIv=setInterval(()=>{ if(!pomRun) return; pomSec--; renderPom(); if(pomSec<=0){ clearInterval(pomIv); if(!pomBreak){toast('⏱ Session done! Break time.'); pomBreak=true; pomSec=300; pill.className='brk'; renderPom(); pomIv=setInterval(arguments.callee,1000);} else {toast('☕ Break over!'); pomStart();} }},1000); }
+    else{ clearInterval(pomIv); pill.className=''; }
+  });
+  document.getElementById('goal-display').addEventListener('click', ()=>{
+    const v=prompt('Daily word goal (0 = off):',S.goal); if(v===null) return;
+    S.goal=Math.max(0,parseInt(v)||0);
+    document.getElementById('goal-r').value=S.goal;
+    document.getElementById('goal-val').textContent=S.goal?S.goal+' words':'off';
+    updateCounts(); saveS();
+  });
+
+  // ── Settings: option toggles ──
+  document.getElementById('tog-dark').addEventListener('change', e=>{
+    S.dark=e.target.checked; document.body.classList.toggle('dark',S.dark);
+    if(!S.dark) document.documentElement.style.setProperty('--bg',S.bg);
+    saveS();
+  });
+  document.getElementById('tog-guide').addEventListener('change', e=>{
+    S.guide=e.target.checked;
+    document.getElementById('guide').style.display=S.guide?'block':'none';
+    const hl=document.getElementById('guide-hl');
+    if(hl) hl.style.background=S.guide?'var(--hl)':'transparent';
+  });
+  document.getElementById('tog-pf').addEventListener('change', e=>{ S.pf=e.target.checked; pfUpdate(); saveS(); });
+  document.getElementById('tog-bell').addEventListener('change', e=>{ S.bell=e.target.checked; });
+  document.getElementById('tog-cr').addEventListener('change', e=>{ S.cr=e.target.checked; });
+  document.getElementById('tog-auto').addEventListener('change', e=>{ S.auto=e.target.checked; });
+  document.getElementById('tog-spell').addEventListener('change', e=>{ S.spell=e.target.checked; document.getElementById('writer').spellcheck=S.spell; saveS(); });
+
+  // ── Auto-save ──
+  setInterval(()=>{ if(S.auto&&dirty) saveDoc(); }, 30000);
+
+  // ── Cmd/Ctrl+S ──
+  document.addEventListener('keydown', e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='s'){ e.preventDefault(); saveDoc(); toast('Saved'); } });
+
+  // ── Resize ──
+  window.addEventListener('resize', ()=>{ _cachedCharsPerLine=0; measureLineHeight(); computeLayout(); typewriterScroll(); });
+
+  initGapi();
+  setTimeout(()=>w.focus(), 150);
+});
+</script>
+</body>
+</html>
